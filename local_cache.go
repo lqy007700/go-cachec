@@ -12,9 +12,10 @@ var (
 )
 
 type BuildInMapCache struct {
-	data  map[string]*Item
-	mu    sync.RWMutex
-	close chan struct{}
+	data      map[string]*Item
+	mu        sync.RWMutex
+	close     chan struct{}
+	onEvicted func(key string, val any)
 }
 
 type Item struct {
@@ -22,12 +23,14 @@ type Item struct {
 	deadline time.Time
 }
 
-func NewBuildInMapCache(size int32) *BuildInMapCache {
+func NewBuildInMapCache(size int32, onEvicted func(key string, val any)) *BuildInMapCache {
 	res := &BuildInMapCache{
-		data:  make(map[string]*Item, size),
-		close: make(chan struct{}, 1),
+		data:      make(map[string]*Item, size),
+		close:     make(chan struct{}),
+		onEvicted: onEvicted,
 	}
 
+	// 轮训删除过期key
 	go func() {
 		ticker := time.NewTicker(time.Second * 10)
 
@@ -40,8 +43,8 @@ func NewBuildInMapCache(size int32) *BuildInMapCache {
 					if i >= 1000 {
 						break
 					}
-					if !val.deadline.IsZero() && val.deadline.Before(t) {
-						delete(res.data, key)
+					if val.deadlineBefore(t) {
+						res.del(key)
 					}
 					i++
 				}
@@ -63,12 +66,13 @@ func (b *BuildInMapCache) Get(ctx context.Context, key string) (any, error) {
 		return nil, ErrKeyNotFund
 	}
 
+	// 判断key是否过期
 	now := time.Now()
-	if !v.deadline.IsZero() && v.deadline.Before(now) {
+	if v.deadlineBefore(now) {
 		b.mu.Lock()
 		v, ok = b.data[key]
-		if ok && !v.deadline.IsZero() && v.deadline.Before(now) {
-			delete(b.data, key)
+		if ok && v.deadlineBefore(now) {
+			b.del(key)
 		}
 		b.mu.Unlock()
 		return nil, ErrKeyNotFund
@@ -101,8 +105,18 @@ func (b *BuildInMapCache) Set(ctx context.Context, key string, val any, expirati
 func (b *BuildInMapCache) Del(ctx context.Context, key string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	delete(b.data, key)
+	b.del(key)
 	return nil
+}
+
+func (b *BuildInMapCache) del(key string) {
+	item, ok := b.data[key]
+	if !ok {
+		return
+	}
+
+	delete(b.data, key)
+	b.onEvicted(key, item.val)
 }
 
 func (b *BuildInMapCache) Close() error {
@@ -112,4 +126,8 @@ func (b *BuildInMapCache) Close() error {
 		return errors.New("已关闭")
 	}
 	return nil
+}
+
+func (i *Item) deadlineBefore(t time.Time) bool {
+	return !i.deadline.IsZero() && i.deadline.Before(t)
 }
