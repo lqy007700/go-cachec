@@ -97,8 +97,6 @@ func (b *BuildInMapCache) Set(ctx context.Context, key string, val any, expirati
 
 	return b.set(key, val, expiration)
 }
-
-// 无锁
 func (b *BuildInMapCache) set(key string, val any, expiration time.Duration) error {
 	b.data[key] = &Item{
 		val:      val,
