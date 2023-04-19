@@ -11,6 +11,10 @@ type RedisCache struct {
 	client redis.Cmdable
 }
 
+func (r *RedisCache) LoadAndDel(ctx context.Context, key string) (any, error) {
+	return r.client.GetDel(ctx, key).Result()
+}
+
 func NewRedisCache(client redis.Cmdable) *RedisCache {
 	return &RedisCache{
 		client: client,

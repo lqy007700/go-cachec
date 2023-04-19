@@ -18,6 +18,18 @@ type BuildInMapCache struct {
 	onEvicted func(key string, val any)
 }
 
+func (b *BuildInMapCache) LoadAndDel(ctx context.Context, key string) (any, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	v, ok := b.data[key]
+	if !ok {
+		return nil, ErrOverCapacity
+	}
+
+	delete(b.data, key)
+	return v.val, nil
+}
+
 type Item struct {
 	val      any
 	deadline time.Time

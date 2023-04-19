@@ -11,4 +11,5 @@ type Cache interface {
 	Set(ctx context.Context, key string, val any, expiration time.Duration) error
 	Del(ctx context.Context, key string) error
 	//Del(key string) (any, error)
+	LoadAndDel(ctx context.Context, key string) (any, error)
 }
