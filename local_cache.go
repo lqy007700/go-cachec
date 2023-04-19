@@ -84,10 +84,6 @@ func (b *BuildInMapCache) Get(ctx context.Context, key string) (any, error) {
 func (b *BuildInMapCache) Set(ctx context.Context, key string, val any, expiration time.Duration) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.data[key] = &Item{
-		val:      val,
-		deadline: time.Now().Add(expiration),
-	}
 
 	// set的时候开启一个定时任务，指定过期时间后删除key
 	//if expiration > 0 {
@@ -99,6 +95,15 @@ func (b *BuildInMapCache) Set(ctx context.Context, key string, val any, expirati
 	//	})
 	//}
 
+	return b.set(key, val, expiration)
+}
+
+// 无锁
+func (b *BuildInMapCache) set(key string, val any, expiration time.Duration) error {
+	b.data[key] = &Item{
+		val:      val,
+		deadline: time.Now().Add(expiration),
+	}
 	return nil
 }
 
